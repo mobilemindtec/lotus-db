@@ -1,0 +1,9 @@
+%% -*- erlang -*-
+{application, lotus_db,
+  [{description, "SQL executor built on top of sql_bridge"},
+   {vsn, "0.1"},
+   {modules, [lotus_db]},
+   {registered, []},
+   {mod, {'lotus_db_app', []}},
+   {env, []},
+   {applications, [kernel, stdlib, crypto, sql_bridge]}]}.
