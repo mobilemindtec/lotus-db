@@ -1,66 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<testsuite tests="9" failures="0" errors="0" skipped="0" time="0.328" name="module 'lotus_db_test'">
-  <testcase time="0.106" name="lotus_db_test:0 orm_read_test">
-    <system-out>SQL Bridge: Building sql_bridge_stringify. Binaries WILL NOT automatically be converted to lists in query responses.
-:3: Warning: export_all flag enabled - all functions will be exported
-Erlias: Building alias db ==&gt; sql_bridge.
-:2: Warning: export_all flag enabled - all functions will be exported
-
-    </system-out>
-  </testcase>
-  <testcase time="0.031" name="lotus_db_test:0 orm_save_test">
-    <system-out>SQL Bridge: Building sql_bridge_stringify. Binaries WILL NOT automatically be converted to lists in query responses.
-:3: Warning: export_all flag enabled - all functions will be exported
-Erlias: Building alias db ==&gt; sql_bridge.
-:2: Warning: export_all flag enabled - all functions will be exported
-
-    </system-out>
-  </testcase>
-  <testcase time="0.024" name="lotus_db_test:0 orm_merge_test">
-    <system-out>SQL Bridge: Building sql_bridge_stringify. Binaries WILL NOT automatically be converted to lists in query responses.
-:3: Warning: export_all flag enabled - all functions will be exported
-Erlias: Building alias db ==&gt; sql_bridge.
-:2: Warning: export_all flag enabled - all functions will be exported
-
-    </system-out>
-  </testcase>
-  <testcase time="0.025" name="lotus_db_test:0 orm_update_test">
-    <system-out>SQL Bridge: Building sql_bridge_stringify. Binaries WILL NOT automatically be converted to lists in query responses.
-:3: Warning: export_all flag enabled - all functions will be exported
-Erlias: Building alias db ==&gt; sql_bridge.
-:2: Warning: export_all flag enabled - all functions will be exported
-
-    </system-out>
-  </testcase>
-  <testcase time="0.049" name="lotus_db_test:0 orm_persist_test">
-    <system-out>SQL Bridge: Building sql_bridge_stringify. Binaries WILL NOT automatically be converted to lists in query responses.
-:3: Warning: export_all flag enabled - all functions will be exported
-Erlias: Building alias db ==&gt; sql_bridge.
-:2: Warning: export_all flag enabled - all functions will be exported
-
-    </system-out>
-  </testcase>
-  <testcase time="0.042" name="lotus_db_test:0 orm_remove_test">
-    <system-out>SQL Bridge: Building sql_bridge_stringify. Binaries WILL NOT automatically be converted to lists in query responses.
-:3: Warning: export_all flag enabled - all functions will be exported
-Erlias: Building alias db ==&gt; sql_bridge.
-:2: Warning: export_all flag enabled - all functions will be exported
-
-    </system-out>
-  </testcase>
-  <testcase time="0.024" name="lotus_db_test:0 orm_delete_test">
-    <system-out>SQL Bridge: Building sql_bridge_stringify. Binaries WILL NOT automatically be converted to lists in query responses.
-:3: Warning: export_all flag enabled - all functions will be exported
-Erlias: Building alias db ==&gt; sql_bridge.
-:2: Warning: export_all flag enabled - all functions will be exported
-
-    </system-out>
-  </testcase>
-  <testcase time="0.000" name="lotus_db_test:0 orm_projection_test">
-    <system-out>
-    </system-out>
-  </testcase>
-  <testcase time="0.000" name="lotus_db_test:0 orm_group_by_test">
+<testsuite tests="1" failures="0" errors="0" skipped="0" time="0.014" name="module 'lotus_db_test'">
+  <testcase time="0.011" name="lotus_db_test:0 test_insert_employee">
     <system-out>
     </system-out>
   </testcase>

@@ -4,23 +4,36 @@
 -include_lib("eunit/include/eunit.hrl").
 
 -export([
-	prepare_sql/5
+	prepare_sql/5,
+	is_return/2
 ]).
 
 prepare_sql(Type, Table, Options, Data, State) ->
 	Configs = State#state.configs,
 	TableName = get_table_name(Table, Configs),
 	Columns = get_table_columns(Table, Configs),
-	{Sql, Args} = create_sql(Type, TableName, Columns, Options, Data),
-	sql_debug(Options, Sql, Args).
+	TableNameAlias = case Options of
+		#options{ alias = undefined } -> TableName;
+		#options{ alias = Alias } -> string:join([TableName, atom_to_list(Alias)], " ")
+	end,
+	{Sql, Args} = create_sql(Type, TableNameAlias, Columns, Options, Data),
+	Opts = case get_is_debug(Configs) of 
+		true -> Options#options { debug = true };
+		_ -> Options
+	end,
+		
+	sql_debug(Opts, string:trim(Sql), Args).
 
 create_sql(select, TableName, Columns, Options=#options{}, _) ->
-	#options{ where = Criterias, sort = Sort, projections = Projections, group = Group} = Options,
+	#options{ where 		= Criterias
+					, order_by 	= Sort
+					, select 		= Projections				
+					, group_by 	= Group} = Options,
 	ColumnsStr = case Projections of
 		[] -> columns_to_select_str(Columns);
 		_ -> string:join(projections_to_str(Projections), ", ")
 	end,
-	Select = string:join(["select", ColumnsStr, "from", TableName], " "),
+	Select = string:join(["select", ColumnsStr, "from",  TableName], " "),
 	{Conditions, ConditionsArgs} = compile_sql_criteria(Criterias),
 	{LimitSql, LimitArgs} = add_limit(Options),
 	{OffsetSql, OffsetArgs} = add_offset(Options),
@@ -125,7 +138,7 @@ add_sort(List) -> add_sort(List, []).
 add_sort([], []) -> [];
 add_sort([], [H|[]]) -> string:join(["order by"| H], " ");
 add_sort([], [H|T]) -> string:join([["order by"| H] | list:join(", ", T)], " ");
-add_sort([#sort{ field = Field, order = Order }|T], Result) ->
+add_sort([#order_by{ field = Field, order = Order }|T], Result) ->
 	add_sort(T, Result ++ [[atom_to_list(Field), atom_to_list(Order)]]).
 
 add_group_by([]) -> [];
@@ -142,9 +155,9 @@ columns_to_select_str([{FieldName, _}|T], Result) -> columns_to_select_str([Fiel
 columns_to_select_str([FieldName|T], Result) -> columns_to_select_str(T, Result++[atom_to_list(FieldName)]).
 
 get_table_columns(TableName, Configs) ->
-	Tables = proplists:get_value(tables, Configs),
-	Table = proplists:get_value(TableName, Tables),
-	proplists:get_value(columns, Table).
+	Tables = proplists:get_value(tables, Configs, []),
+	Table = proplists:get_value(TableName, Tables, []),
+	proplists:get_value(columns, Table, []).
 
 get_table_name(TableName, Configs) ->
 	Tables = proplists:get_value(tables, Configs),
@@ -155,6 +168,11 @@ get_table_name(TableName, Configs) ->
 get_table_name(Name) when is_atom(Name) -> atom_to_list(Name);
 get_table_name(Name) -> Name.
 
+get_default_return_type(Configs) ->
+	proplists:get_value(return, Configs, undefined).
+
+get_is_debug(Configs) ->
+	Tables = proplists:get_value(debug, Configs, false).
 
 create_val_args(Type, Columns, Data) -> create_val_args(Type, Columns, Data, []).
 create_val_args(Type, [], _, Args) -> Args;
@@ -187,19 +205,25 @@ columns_to_update_str(Type, [FieldName|T], Data, Result) ->
 	columns_to_update_str(Type, [{FieldName, []}|T], Data, Result).
 
 get_column_data_val(Type, FieldName, Opts, Data) ->
-	Def = proplists:get_value(FieldName, Data, skip),
-	Id  = proplists:get_value(id, Data, 0),
+
+	Def = get_data_val(FieldName, Data, skip),
+	Id  = get_data_val(id, Data, 0),
 	Auto = proplists:get_value(auto, Opts, false),
 	Key = proplists:get_value(key, Opts, false),
 	ForceAuto = Type =:= save orelse Type =:= merge,
+	%?debugFmt("FieldName = ~p, Auto = ~p, Id = ~p, Def = ~p", [FieldName, Auto, Id, Def]),
+	EmptyId = Id =:= 0 orelse Id =:= undefined, 
 	if
 		Def =:= skip andalso not ForceAuto -> skip;
 		Auto =:= uuid -> lotus_db_uuid:v4();
 		Auto =:= updated -> calendar:local_time();
-		Auto =:= created andalso Id =:= 0 -> calendar:local_time(); 
+		Auto =:= created andalso EmptyId -> calendar:local_time();  
 		Key =:= auto -> skip;
 		true ->  Def
 	end.
+
+get_data_val(FieldName, Data, Default) when is_list(Data) -> proplists:get_value(FieldName, Data, Default);
+get_data_val(FieldName, Data, Default) when is_map(Data) -> maps:get(FieldName, Data, Default). 
 
 %% debug
 
@@ -210,3 +234,13 @@ sql_debug(#options{ debug = true }, Sql, Args) ->
 	?debugFmt("SQL: ~p, ARGS: ~p", [Sql, string:join(ArgsStrList, ", ")]), 	
 	{Sql, Args};
 sql_debug(_, Sql, Args) -> {Sql, Args}.
+
+is_return(#options{ return = Return }, Val) -> is_return(Return, Val);
+is_return(R, Val) when not is_tuple(R) -> is_return({R}, Val);
+is_return(_, []) -> true; 
+is_return(Return, [H|T]) ->
+	case lists:member(H, tuple_to_list(Return)) of
+		true -> is_return(T, Return);
+		_ -> false
+	end;
+is_return(Return, Val) -> lists:member(Val, tuple_to_list(Return)). 
