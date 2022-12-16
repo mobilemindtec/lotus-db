@@ -2,7 +2,7 @@
 
 -behaviour(gen_server).
 
--include("include/lotus_db.hrl").
+-include("../include/lotus_db.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 %-export_type([options/0, criteria/0, sort/0, tuple_opts/0]).
@@ -108,7 +108,16 @@ new_order_by([[Field, Order]|T], Result) -> new_order_by(T, Result++[#order_by{ 
 new_order_by([Field|T], Result) -> new_order_by(T, Result++[#order_by{ field = Field }]).
 
 new_criteria([]) -> [];
-new_criteria(List) -> new_criteria(List, []).
+new_criteria(List) when is_list(List) -> new_criteria(List, []);
+new_criteria(Map) when is_map(Map) ->
+  Props = lists:map(fun(Key) ->
+    Val = maps:get(Key, Map),
+    case Val of
+      X when is_list(X) -> [Key|X];
+      _ -> [Key, Val]
+    end
+  end, maps:keys(Map)),
+  new_criteria(Props, []).
 
 new_criteria([], Result) -> Result;
 new_criteria([[Field, in, Value]|T], Result) -> new_criteria(T, Result++[#criteria{ field = Field, test = in, values = Value }]);
