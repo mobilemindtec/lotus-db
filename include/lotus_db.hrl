@@ -6,7 +6,8 @@
 									, test        = eq						:: eq | ne | lt | le | gt | ge | between | in | like | ilike
 									, match                       :: contains | starts_with | ends_with | anyware
 									, value 											:: any()
-									, values 											:: list(any())}).
+									, values 											:: list(any())
+								  , native      = undefined     :: atom() | string()}).
 
 -type criteria() 																:: #criteria{}.
 
@@ -15,20 +16,23 @@
 
 -type order_by()																:: #order_by{}.
 
--record(on, { l                            :: atom(),
-									 r                            :: atom(),
-									 test        = eq             :: atom()}).
+-record(on, { left                            :: atom(),
+							right                            :: atom()}).
 
 -type on() 																::#on{}.
 
 -record(join, { table                           :: atom()
-		          , alias                           :: atom()
+		          , type 						= full 					:: atom() | full | left | right | inner | outer
+		          , alias           = undefined     :: atom()
+							, where           = []				    :: list(criteria())
+							, join            = []            :: list(join())
 		          , on                              :: list(on())}). %['tb1.id' eq 'tb2.id']
 
 -type join() 																		:: #join{}.
 
 -record(options, { table                        :: atom()
-								 , alias        = undefined     :: atom()  
+								 , alias        = undefined     :: atom()
+								 , join         = []            :: list(join())
 								 , limit 				= 0 						:: integer()
 								 , offset 			= 0 						:: integer()
 								 , where        = []				    :: list(criteria())

@@ -27,7 +27,11 @@ t_test_() ->
   {setup,
    fun test_setup/0,
    fun test_teardown/1,
-   [fun test_insert_employee/0]}.
+   [
+     fun test_insert_employee/0,
+     fun test_join/0,
+     fun test_native_select/0
+   ]}.
 
 test_insert_employee() ->
 
@@ -41,9 +45,39 @@ test_insert_employee() ->
 	?assert(Id > 0),
 	{ok, #{id := Id, name := Name }, {SqlSelect, _}} = lotus_db:first(employees, #{where => [id, Id], return => sql}),
 	{ok, 1, {SqlUpdate, _}} = lotus_db:update(employees, #{name => <<"Tom">>}, #{where => [id, Id], return => sql}),
-	{ok, 1, {SqDelete, _}} = lotus_db:delete(employees, #{where => [id, Id], return => sql}),
-	{ok, 1, {SqCount, _}} = lotus_db:count(employees, #{}),
+  {ok, 1, {SqCount, _}} = lotus_db:count(employees, #{return => sql}),
+  {ok, 1, {SqDelete, _}} = lotus_db:delete(employees, #{where => [id, Id], return => sql}),
+  {ok, [], {"select name e_name from employees", _}}  = lotus_db:list(employees, #{ select => #{name => e_name}, return => sql}),
 	ok.
+
+test_join() ->
+  Joins = #{
+    alias => emp,
+    select => ['emp.id', 'dept_emps.id'],
+    join => [
+      #{table => dept_emps,
+        on => [id, employee_id],
+        join => #{table => departments,
+                  alias => deps,
+                  on => [department_id, id]
+        }
+      }
+    ],
+    where => [['emp.id', 1], ['dept_emps.id', 1]],
+    return => sql
+  },
+  {ok, [], {"select emp.id, dept_emps.id from employees emp left join dept_emps on emp.id = dept_emps.employee_id left join departments deps on dept_emps.department_id = deps.id where emp.id = ? and dept_emps.id = ?", _}}  = lotus_db:list(employees, Joins).
+
+test_native_select() ->
+  NativeSelect = #{
+    where => #{
+      native => "exists (select id from employees where id = ?)",
+      args => [5]
+    },
+    return => sql
+  },
+  {ok, [], {"select id, name, created_at, updated_at from employees where exists (select id from employees where id = ?)", _}}  = lotus_db:list(employees, NativeSelect).
+
 
 %orm_read_test() ->
 %	ok = sql_bridge:start(),

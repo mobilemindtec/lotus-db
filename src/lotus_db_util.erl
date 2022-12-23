@@ -1,11 +1,12 @@
 -module(lotus_db_util).
 
--include("include/lotus_db.hrl").
+-include("../include/lotus_db.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 -export([
 	prepare_sql/5,
-	is_return/2
+	is_return/2,
+  conv_col_name/1
 ]).
 
 prepare_sql(Type, Table, Options, Data, State) ->
@@ -27,19 +28,29 @@ prepare_sql(Type, Table, Options, Data, State) ->
 create_sql(select, TableName, Columns, Options=#options{}, _) ->
 	#options{ where 		= Criterias
 					, order_by 	= Sort
-					, select 		= Projections				
-					, group_by 	= Group} = Options,
+					, select 		= Projections
+					, group_by 	= Group
+          , join = Join} = Options,
+  MainJoin = if
+               length(Join) == 0 -> #join{};
+               true ->
+                 options_to_join(Options#options{table = list_to_atom(TableName)})
+             end,
 	ColumnsStr = case Projections of
-		[] -> columns_to_select_str(Columns);
+		[] -> columns_to_select_str(MainJoin, Columns);
 		_ -> string:join(projections_to_str(Projections), ", ")
 	end,
 	Select = string:join(["select", ColumnsStr, "from",  TableName], " "),
+  Joins = join_compile(MainJoin, Join),
 	{Conditions, ConditionsArgs} = compile_sql_criteria(Criterias),
 	{LimitSql, LimitArgs} = add_limit(Options),
 	{OffsetSql, OffsetArgs} = add_offset(Options),
 	GroupStr = add_group_by(Group),
 	SortStr = add_sort(Sort),
-	{string:join([Select, Conditions, SortStr, GroupStr, LimitSql, OffsetSql], " "), ConditionsArgs++LimitArgs++OffsetArgs};
+
+  SelectList = [Select, Joins, Conditions, SortStr, GroupStr, LimitSql, OffsetSql],
+  SelectConstruct = lists:filter(fun(X) -> length(X) > 0 end, SelectList),
+	{string:join(SelectConstruct, " "), ConditionsArgs++LimitArgs++OffsetArgs};
 
 create_sql(count, TableName, _, #options{ where = Criterias } = Options, _) ->
 	Select = string:join(["select count(*) from", TableName], " "),
@@ -71,9 +82,15 @@ create_sql(persist, TableName, Columns, Options, Data) ->
 		_  -> {save, create_sql(save, TableName, Columns, Options, Data)}
 	end.
 
+projections_to_str(Projections) when is_map(Projections) ->
+  NewProjections = lists:map(fun(Key) ->
+                              [conv_col_name(Key) ++ " "
+                                ++ conv_col_name(maps:get(Key, Projections))]
+                             end, maps:keys(Projections)),
+  projections_to_str(NewProjections);
 projections_to_str(Projections) -> projections_to_str(Projections, []).
 projections_to_str([], Result) -> Result;
-projections_to_str([H|T], Result) when is_atom(H) -> projections_to_str(T, Result++[atom_to_list(H)]);
+projections_to_str([H|T], Result) when is_atom(H) -> projections_to_str(T, Result++[conv_col_name(H)]);
 projections_to_str([H|T], Result) -> projections_to_str(T, Result++[H]).
 
 criteria_cond(eq) -> "=";
@@ -89,11 +106,18 @@ compile_criteria_replace_args(in, _, Values) -> "(" ++ string:join(lists:map(fun
 compile_criteria_replace_args(between, _, Values) -> "? and ?";
 compile_criteria_replace_args(_, _, _) -> "?".
 
-compile_criteria_condition(#criteria{ field = Field, test = Cond, value = Value, values = Values }) ->
-	[	atom_to_list(Field)
-	, criteria_cond(Cond)
-	, compile_criteria_replace_args(Cond, Value, Values)].
-
+compile_criteria_condition(#criteria{ field = Field, test = eq, value = null}) ->
+  [atom_to_list(Field), "is null"];
+compile_criteria_condition(#criteria{ field = Field, test = ne, value = null}) ->
+  [atom_to_list(Field), "is not null"];
+compile_criteria_condition(#criteria{ field = Field, test = Cond, value = Value, values = Values, native = Native }) ->
+  case Native of
+    undefined ->
+      [	atom_to_list(Field)
+        , criteria_cond(Cond)
+        , compile_criteria_replace_args(Cond, Value, Values)];
+    _ -> [Native]
+  end.
 
 criteria_compile([]) -> [];
 criteria_compile(Criterias) -> criteria_compile(Criterias, []).
@@ -101,11 +125,72 @@ criteria_compile([], Compiled) -> Compiled;
 criteria_compile([H|T], Compiled) ->
 	criteria_compile(T, Compiled++[string:join(compile_criteria_condition(H), " ")]).
 
+options_to_join(#options{ table = Table, alias = Alias}) -> #join{table = Table, alias = Alias}.
 
+join_compile(MainJoin, Joins) -> join_compile(MainJoin, Joins, []).
+join_compile(_, [], Results) -> string:join(Results, " ");
+join_compile(MainJoin, [J|T], Results) ->
+  On = J#join.on,
+  JoinAliasTable = get_join_alias(J),
+  JoinAliasCol = get_join_alias_col_join(J),
+  TableAliasCol = get_join_alias_col_join(MainJoin),
+  JoinList = [get_join_type(J#join.type)
+            , "join"
+            , JoinAliasTable
+            , "on"
+            , TableAliasCol++atom_to_list(On#on.left)
+            , "="
+            , JoinAliasCol++atom_to_list(On#on.right)],
+  JoinStr = string:join(JoinList, " "),
+  ChildJoins = case J#join.join of
+                  [] -> [JoinStr];
+                  ChildJoin -> [JoinStr|[join_compile(J, ChildJoin)]]
+               end,
+  join_compile(MainJoin, T, ChildJoins++Results).
+
+
+get_join_alias_col_join(#join{alias = Alias, table = JoinTable}) ->
+  case Alias of
+    undefined -> case JoinTable of
+                   undefined -> "";
+                   _ -> atom_to_list(JoinTable) ++ "."
+                 end;
+    _ -> atom_to_list(Alias) ++ "."
+  end.
+
+get_join_alias_col_sel(#join{alias = Alias, table = JoinTable}, Col) ->
+  case Alias of
+    undefined -> case JoinTable of
+                   undefined -> Col;
+                   _ ->
+                     Al = atom_to_list(JoinTable),
+                     Al ++ "." ++ Col ++ " " ++ Al++"_"++Col
+                 end;
+    _ ->
+      Al = atom_to_list(Alias),
+      Al ++ "." ++ Col ++ " " ++ Al++"_"++Col
+  end.
+
+get_join_alias(#join{alias = Alias, table = JoinTable}) ->
+  case Alias of
+    undefined -> atom_to_list(JoinTable);
+    _ -> atom_to_list(JoinTable) ++ " " ++ atom_to_list(Alias)
+  end.
+
+get_join_type(left) -> "left";
+get_join_type(right) -> "right";
+get_join_type(full) -> "full";
+get_join_type(outer) -> "outer";
+get_join_type(inner) -> "inner".
+
+compile_criteria_args(#criteria{ value = null }) -> [];
 compile_criteria_args(#criteria{ test = in, values = Values}) -> Values;
 compile_criteria_args(#criteria{ test = between, values = Values}) -> Values;
-compile_criteria_args(#criteria{value = Value}) -> [Value].
-
+compile_criteria_args(#criteria{value = Value, values = Values, native = Native}) ->
+  case Native of
+    undefined -> [Value];
+    _ -> Values
+  end.
 
 criteria_compile_args(Criterias) -> criteria_compile_args(Criterias, []).
 criteria_compile_args([], Args) -> Args;
@@ -149,10 +234,15 @@ add_group_by([], Result) -> string:join(["group by" | Result], " ");
 add_group_by([Field|T], Result) ->
 	add_group_by(T, Result ++ [atom_to_list(Field)]).
 
-columns_to_select_str(Columns) -> columns_to_select_str(Columns, []).
-columns_to_select_str([], Result) -> string:join(Result, ", ");
-columns_to_select_str([{FieldName, _}|T], Result) -> columns_to_select_str([FieldName|T], Result);
-columns_to_select_str([FieldName|T], Result) -> columns_to_select_str(T, Result++[atom_to_list(FieldName)]).
+columns_to_select_str(Join, Columns) -> columns_to_select_str(Join, Columns, []).
+columns_to_select_str(_, [], Result) -> string:join(Result, ", ");
+columns_to_select_str(Join, [{FieldName, _}|T], Result) ->
+  columns_to_select_str(Join, [FieldName|T], Result);
+columns_to_select_str(Join, [FieldName|T], Result) ->
+  columns_to_select_str(Join, T, Result++[get_join_alias_col_sel(Join, conv_col_name(FieldName))]).
+
+conv_col_name(C) when is_atom(C) -> atom_to_list(C);
+conv_col_name(C) -> C.
 
 get_table_columns(TableName, Configs) ->
 	Tables = proplists:get_value(tables, Configs, []),
@@ -219,6 +309,7 @@ get_column_data_val(Type, FieldName, Opts, Data) ->
 		Auto =:= updated -> calendar:local_time();
 		Auto =:= created andalso EmptyId -> calendar:local_time();  
 		Key =:= auto -> skip;
+    Def =:= null -> skip;
 		true ->  Def
 	end.
 

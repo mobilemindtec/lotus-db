@@ -43,60 +43,77 @@
 
 
 start(DbConfigs) ->
-	ok = sql_bridge:start(),
-	gen_server:start({global, ?MODULE}, ?MODULE, [DbConfigs], []).
+	gen_server:start({local, ?MODULE}, ?MODULE, DbConfigs, []).
 
 start_link(DbConfigs) ->
 	ok = sql_bridge:start(),
-	gen_server:start_link({global, ?MODULE}, ?MODULE, [DbConfigs], []).
+	gen_server:start_link({local, ?MODULE}, ?MODULE, DbConfigs, []).
 
-init([DbConfigs]) ->
+init(DbConfigs) ->
+  lager:info("lotus db init"),
 	{ok, #state{ configs = DbConfigs }}.
 
  %% api
-list(TableName, Options) -> list({global, ?MODULE}, TableName, Options).
+
+call(Args) ->
+  call(undefined, Args).
+call(Pid, Args) ->
+  PidRef = case Pid of
+             undefined ->
+               case whereis(?MODULE) of
+                 P when is_pid(P) -> P;
+                 _ ->
+                   lager:info("[lotus_db] pid not found"),
+                   throw("pid not found")
+               end;
+             _ ->
+               Pid
+           end,
+  gen_server:call(PidRef, Args).
+
+list(TableName, Options) -> list(undefined, TableName, Options).
 list(Pid, TableName, Options) ->
-	gen_server:call(Pid, {list, TableName, Options}).
+	call(Pid, {list, TableName, Options}).
 
-first(TableName, Options) -> first({global, ?MODULE}, TableName, Options).
+first(TableName, Options) -> first(undefined, TableName, Options).
 first(Pid, TableName, Options) ->
-	gen_server:call(Pid, {first, TableName, Options}).
+	call(Pid, {first, TableName, Options}).
 
-count(TableName, Options) -> count({global, ?MODULE}, TableName, Options).
+count(TableName, Options) -> count(undefined, TableName, Options).
 count(Pid, TableName, Options) ->
-	gen_server:call(Pid, {count, TableName, Options}).
+	call(Pid, {count, TableName, Options}).
 
-exists(TableName, Options) -> exists({global, ?MODULE}, TableName, Options).
+exists(TableName, Options) -> exists(undefined, TableName, Options).
 exists(Pid, TableName, Options) ->
-	gen_server:call(Pid, {exists, TableName, Options}).
+	call(Pid, {exists, TableName, Options}).
 
-page(TableName, Options) -> page({global, ?MODULE}, TableName, Options).
+page(TableName, Options) -> page(undefined, TableName, Options).
 page(Pid, TableName, Options) ->
-	gen_server:call(Pid, {page, TableName, Options}).
+	call(Pid, {page, TableName, Options}).
 
-save(TableName, Data, Options) -> save({global, ?MODULE}, TableName, Data, Options).
+save(TableName, Data, Options) -> save(undefined, TableName, Data, Options).
 save(Pid, TableName, Data, Options) ->
-	gen_server:call(Pid, {save, TableName,  Data, Options}).
+	call(Pid, {save, TableName,  Data, Options}).
 
-merge(TableName, Data) -> merge({global, ?MODULE}, TableName, Data).
+merge(TableName, Data) -> merge(undefined, TableName, Data).
 merge(Pid, TableName, Data) ->
-	gen_server:call(Pid, {merge, TableName, Data}).
+	call(Pid, {merge, TableName, Data}).
 
-update(TableName, Data, Options) -> update({global, ?MODULE}, TableName, Data, Options).
+update(TableName, Data, Options) -> update(undefined, TableName, Data, Options).
 update(Pid, TableName, Data, Options) ->
-	gen_server:call(Pid, {update, TableName, Data, Options}).
+	call(Pid, {update, TableName, Data, Options}).
 
-remove(TableName, Data) -> remove({global, ?MODULE}, TableName, Data).
+remove(TableName, Data) -> remove(undefined, TableName, Data).
 remove(Pid, TableName, Data) ->
-	gen_server:call(Pid, {remove, TableName, Data}).
+	call(Pid, {remove, TableName, Data}).
 
-delete(TableName, Options) -> delete({global, ?MODULE}, TableName, Options).
+delete(TableName, Options) -> delete(undefined, TableName, Options).
 delete(Pid, TableName, Options) ->
-	gen_server:call(Pid, {delete, TableName, Options}).
+	call(Pid, {delete, TableName, Options}).
 
-persist(TableName, Data, Options) -> persist({global, ?MODULE}, TableName, Data, Options).
+persist(TableName, Data, Options) -> persist(undefined, TableName, Data, Options).
 persist(Pid, TableName, Data, Options) ->
-	gen_server:call(Pid, {persist, TableName, Data, Options}).
+	call(Pid, {persist, TableName, Data, Options}).
 
 %% api records
 
@@ -104,30 +121,62 @@ new_order_by([]) -> [];
 new_order_by(List) -> new_order_by(List, []).
 
 new_order_by([], Result) -> Result;
+new_order_by(OrderBy, Result) when is_atom(OrderBy) -> new_order_by([OrderBy], Result);
+new_order_by(OrderBy=[_, _], Result) -> new_order_by([OrderBy], Result);
 new_order_by([[Field, Order]|T], Result) -> new_order_by(T, Result++[#order_by{ field = Field, order = Order }]);
 new_order_by([Field|T], Result) -> new_order_by(T, Result++[#order_by{ field = Field }]).
 
 new_criteria([]) -> [];
 new_criteria(List) when is_list(List) -> new_criteria(List, []);
 new_criteria(Map) when is_map(Map) ->
-  Props = lists:map(fun(Key) ->
-    Val = maps:get(Key, Map),
-    case Val of
-      X when is_list(X) -> [Key|X];
-      _ -> [Key, Val]
-    end
-  end, maps:keys(Map)),
+  Props = case maps:get(native, Map, undefined) of
+            undefined ->
+              lists:map(fun(Key) ->
+                          Val = maps:get(Key, Map),
+                          case Val of
+                            X when is_list(X) -> [Key|X];
+                            _ -> [Key, Val]
+                          end
+                        end, maps:keys(Map));
+            _ ->
+              Map
+          end,
   new_criteria(Props, []).
 
 new_criteria([], Result) -> Result;
-new_criteria([[Field, in, Value]|T], Result) -> new_criteria(T, Result++[#criteria{ field = Field, test = in, values = Value }]);
-new_criteria([[Field, between, Value]|T], Result) -> new_criteria(T, Result++[#criteria{ field = Field, test = between, values = Value }]);
-new_criteria([[Field, Test, Value]|T], Result) -> new_criteria(T, Result++[#criteria{ field = Field, test = Test, value = Value }]);
-new_criteria([[Field, Value]|T], Result) -> new_criteria(T, Result++[#criteria{ field = Field, value = Value }]);
+new_criteria(M, Result) when is_map(M) -> new_criteria([M], Result);
+new_criteria([M|T], Result) when is_map(M) ->
+  new_criteria(T, Result++[#criteria{ native = maps:get(native, M), values = maps:get(args, M, []) }]);
+new_criteria([[Field, in, Value]|T], Result) ->
+  new_criteria(T, Result++[#criteria{ field = Field, test = in, values = Value }]);
+new_criteria([[Field, between, Value]|T], Result) ->
+  new_criteria(T, Result++[#criteria{ field = Field, test = between, values = Value }]);
+new_criteria([[Field, Test, Value]|T], Result) ->
+  new_criteria(T, Result++[#criteria{ field = Field, test = Test, value = Value }]);
+new_criteria([[Field, Value]|T], Result) ->
+  new_criteria(T, Result++[#criteria{ field = Field, value = Value }]);
 new_criteria([_, _, _]=H, Result) -> new_criteria([H], Result);
 new_criteria([_, _]=H, Result) -> new_criteria([H], Result).
 
-new_options(Val) when is_list(Val) ->
+new_join(MainTableAlias, Joins) when is_map(Joins)-> new_join(MainTableAlias, [Joins]);
+new_join(MainTableAlias, Joins) -> new_join(MainTableAlias, Joins, []).
+new_join(_, [], Results) -> Results;
+new_join(MainTableAlias, [Join|T], Results) ->
+  JoinTable = maps:get(table, Join),
+  Alias = maps:get(alias, Join, undefined),
+  ChildJoin = maps:get(join, Join, []),
+  Type = maps:get(type, Join, left),
+  [Left, Right] = maps:get(on, Join, undefined),
+  Where = maps:get(where, Join, []),
+  JoinRec = #join{ alias =  Alias
+                 , type = Type
+                 , table = JoinTable
+                 , where = new_criteria(Where)
+                 , join = new_join(JoinTable, ChildJoin)
+                 , on = #on { left = Left, right = Right } },
+  new_join(MainTableAlias, T, [JoinRec]++Results).
+
+new_options(TableName, Val) when is_list(Val) ->
 	Sort = proplists:get_value(order_by, Val, []),
 	Limit = proplists:get_value(limit, Val, 0),
 	Offset = proplists:get_value(offset, Val, 0),
@@ -137,6 +186,7 @@ new_options(Val) when is_list(Val) ->
 	Return = proplists:get_value(return, Val, map),
 	Mapper = proplists:get_value(mapper, Val, undefined),
 	Debug = proplists:get_value(debug, Val, false),
+  Alias = proplists:get_value(alias, Val, TableName),
 	Options = #options{ limit = Limit
 										, offset = Offset
 										, order_by = new_order_by(Sort)
@@ -149,7 +199,7 @@ new_options(Val) when is_list(Val) ->
 	%?debugFmt("Options = ~p", [Options]),
 	Options;
 
-new_options(Val) when is_map(Val) ->
+new_options(TableName, Val) when is_map(Val) ->
 	Sort = maps:get(order_by, Val, []),
 	Limit = maps:get(limit, Val, 0),
 	Offset = maps:get(offset, Val, 0),
@@ -159,7 +209,15 @@ new_options(Val) when is_map(Val) ->
 	Return = maps:get(return, Val, map),
 	Mapper = maps:get(mapper, Val, undefined),	
 	Debug = maps:get(debug, Val, false),
+  Alias = maps:get(alias, Val, undefined),
+  Join = maps:get(join, Val, []),
+  JoinAlias = case Alias of
+                undefined -> TableName;
+                _ -> Alias
+              end,
 	Options = #options{ limit = Limit
+                    , alias = Alias
+                    , join = new_join(JoinAlias, Join)
 										, offset = Offset
 										, order_by = new_order_by(Sort)
 										, where = new_criteria(Criterias)
@@ -181,7 +239,7 @@ handle_call({first, Table, Options=#options{}}, _From, State) ->
 	{reply, create_result(Options, ResultSet, {Sql, Args}), State};
 
 handle_call({first, Table, Options}, From, State) ->
-	handle_call({first, Table, new_options(Options)}, From, State);
+	handle_call({first, Table, new_options(Table, Options)}, From, State);
 
 %% list
 handle_call({list, Table, Options=#options{}}, _From, State) ->
@@ -190,7 +248,7 @@ handle_call({list, Table, Options=#options{}}, _From, State) ->
 	{reply, create_result(Options, ResultSet, {Sql, Args}), State};
 
 handle_call({list, Table, Options}, From, State) ->	
-	handle_call({list, Table, new_options(Options)}, From, State);
+	handle_call({list, Table, new_options(Table, Options)}, From, State);
 
 %% count
 handle_call({count, Table, Options=#options{}}, _From, State) ->
@@ -199,7 +257,7 @@ handle_call({count, Table, Options=#options{}}, _From, State) ->
 	{reply, create_result(Options, ResultSet, {Sql, Args}), State};
 
 handle_call({count, Table, Options}, From, State) ->	
-	handle_call({count, Table, new_options(Options)}, From, State);
+	handle_call({count, Table, new_options(Table, Options)}, From, State);
 
 %% exists
 handle_call({exists, Table, Options=#options{}}, _From, State) ->
@@ -208,7 +266,7 @@ handle_call({exists, Table, Options=#options{}}, _From, State) ->
 	{reply, create_result(Options, ResultSet, {Sql, Args}), State};
 
 handle_call({exists, Table, Options}, From, State) ->	
-	handle_call({exists, Table, new_options(Options)}, From, State);
+	handle_call({exists, Table, new_options(Table, Options)}, From, State);
 
 %% page
 handle_call({page, Table, Options=#options{}}, _From, State) ->
@@ -223,7 +281,7 @@ handle_call({page, Table, Options=#options{}}, _From, State) ->
 	{reply, create_result(Options, Result, [{SqlSelect, ArgsSelect}, {SqlCount, ArgsCount}]), State};
 
 handle_call({page, Table, Options}, From, State) ->	
-	handle_call({page, Table, new_options(Options)}, From, State);
+	handle_call({page, Table, new_options(Table, Options)}, From, State);
 
 %% save
 handle_call({save, Table, Data, Options=#options{}}, _From, State) ->
@@ -236,7 +294,7 @@ handle_call({save, Table, Data, Options=#options{}}, _From, State) ->
 	{reply, create_result(Options, NewData, {Sql, Args}), State};
 
 handle_call({save, Table, Data, Options}, From, State) ->	
-	handle_call({save, Table, Data, new_options(Options)}, From, State);
+	handle_call({save, Table, Data, new_options(Table, Options)}, From, State);
 
 %% update
 handle_call({update, Table, Data, Options=#options{}}, _From, State) ->
@@ -245,7 +303,7 @@ handle_call({update, Table, Data, Options=#options{}}, _From, State) ->
 	{reply, create_result(Options, RowsCount, {Sql, Args}), State};
 
 handle_call({update, Table, Data, Options}, From, State) ->	
-	handle_call({update, Table, Data, new_options(Options)}, From, State);
+	handle_call({update, Table, Data, new_options(Table, Options)}, From, State);
 
 %% merge
 handle_call({merge, Table, Data}, _From, State) ->
@@ -267,7 +325,7 @@ handle_call({delete, Table, Options=#options{}}, _From, State) ->
 	{reply, create_result(Options, ResultSet, {Sql, Args}), State};
 
 handle_call({delete, Table, Options}, From, State) ->	
-	handle_call({delete, Table, new_options(Options)}, From, State);
+	handle_call({delete, Table, new_options(Table, Options)}, From, State);
 
 %% remove
 handle_call({remove, Table, Data}, _From, State) ->
@@ -300,7 +358,7 @@ handle_call({persist, Table, Data, Options=#options{}}, _From, State) ->
 	{reply, Result, State};
 
 handle_call({persist, Table, Data, Options}, From, State) ->	
-	handle_call({persist, Table, Data, new_options(Options)}, From, State);
+	handle_call({persist, Table, Data, new_options(Table, Options)}, From, State);
 
 handle_call(_Event, _From, State) ->
 	{reply, {error, "event not found"}, State}.
@@ -309,8 +367,8 @@ handle_call(_Event, _From, State) ->
 %% privates
 
 affected_rows(1, Data)-> Data;
-affected_rows(0, Data)-> not_found;
-affected_rows(RowsCount, Data)-> {error, integer_to_list(RowsCount)++"rows affected"}.
+affected_rows(0, _)-> not_found;
+affected_rows(RowsCount, _)-> {error, integer_to_list(RowsCount)++"rows affected"}.
 
 create_result(Options, ResultSet, Return) ->
 	case lotus_db_util:is_return(Options, sql) of
@@ -331,7 +389,7 @@ to_result(Options, Result) -> {ok, convert_result(Options, Result)}.
 convert_result(Options, Result) ->
 	case lotus_db_util:is_return(Options, props) of
 		true -> Result;
-		_ -> result_to_map(Result) 
+		_ -> result_to_map(Result)
 	end.
 
 result_to_map(Data) when is_map(Data) -> Data;
