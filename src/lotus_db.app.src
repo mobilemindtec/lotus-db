@@ -6,7 +6,7 @@
               lotus_db_util,
               lotus_db_uuid]},
    {registered, []},
-   {included_applications, [sql_bridge, erlias]},
+   {included_applications, [mysql, poolboy, sql_bridge, erlias]},
    %{mod, {'lotus_db_app', []}},
    {env, []},
    {applications, [kernel, stdlib, crypto]}]}.

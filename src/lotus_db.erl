@@ -59,16 +59,16 @@ call(Args) ->
   call(undefined, Args).
 call(Pid, Args) ->
   PidRef = case Pid of
-             undefined ->
-               case whereis(?MODULE) of
-                 P when is_pid(P) -> P;
-                 _ ->
-                   lager:info("[lotus_db] pid not found"),
-                   throw("pid not found")
-               end;
-             _ ->
-               Pid
-           end,
+   undefined ->
+     case whereis(?MODULE) of
+       P when is_pid(P) -> P;
+       _ ->
+         lager:info("[lotus_db] pid not found"),
+         throw("pid not found")
+     end;
+   _ ->
+     Pid
+ end,
   gen_server:call(PidRef, Args).
 
 list(TableName, Options) -> list(undefined, TableName, Options).

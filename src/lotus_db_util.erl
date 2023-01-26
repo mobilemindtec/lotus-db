@@ -322,7 +322,7 @@ sql_debug_arg_str(Arg) when is_list(Arg) -> Arg;
 sql_debug_arg_str(Arg)  -> lists:flatten(io_lib:format("~p", [Arg])).
 sql_debug(#options{ debug = true }, Sql, Args) ->
 	ArgsStrList = lists:map(fun sql_debug_arg_str/1, Args),
-	?debugFmt("SQL: ~p, ARGS: ~p", [Sql, string:join(ArgsStrList, ", ")]), 	
+	%?debugFmt("SQL: ~p, ARGS: ~p", [Sql, string:join(ArgsStrList, ", ")]), 	
 	{Sql, Args};
 sql_debug(_, Sql, Args) -> {Sql, Args}.
 
