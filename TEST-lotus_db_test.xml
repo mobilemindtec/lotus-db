@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<testsuite tests="3" failures="0" errors="0" skipped="0" time="0.026" name="module 'lotus_db_test'">
-  <testcase time="0.016" name="lotus_db_test:0 test_insert_employee">
+<testsuite tests="3" failures="0" errors="0" skipped="0" time="0.031" name="module 'lotus_db_test'">
+  <testcase time="0.019" name="lotus_db_test:0 test_insert_employee">
     <system-out>
     </system-out>
   </testcase>
@@ -8,7 +8,7 @@
     <system-out>
     </system-out>
   </testcase>
-  <testcase time="0.000" name="lotus_db_test:0 test_native_select">
+  <testcase time="0.002" name="lotus_db_test:0 test_native_select">
     <system-out>
     </system-out>
   </testcase>
