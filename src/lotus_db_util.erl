@@ -106,12 +106,12 @@ compile_criteria_replace_args(in, _, Values) -> "(" ++ string:join(lists:map(fun
 compile_criteria_replace_args(between, _, Values) -> "? and ?";
 compile_criteria_replace_args(_, _, _) -> "?".
 
-compile_criteria_condition(#criteria{ field = Field, test = eq, value = null}) ->
-	compile_criteria_condition(#criteria{ value = is_null });
+compile_criteria_condition(C=#criteria{ field = Field, test = eq, value = null}) ->
+	compile_criteria_condition(C#criteria{ value = is_null });
 compile_criteria_condition(#criteria{ field = Field, test = eq, value = is_null}) ->
   [atom_to_list(Field), "is null"];
-compile_criteria_condition(#criteria{ field = Field, test = ne, value = null}) ->
-	compile_criteria_condition(#criteria{ test = eq, value = is_not_null});
+compile_criteria_condition(C=#criteria{ field = Field, test = ne, value = null}) ->
+	compile_criteria_condition(C#criteria{ test = eq, value = is_not_null});
 compile_criteria_condition(#criteria{ field = Field, test = eq, value = is_not_null}) ->
   [atom_to_list(Field), "is not null"];
 compile_criteria_condition(#criteria{ field = Field, test = Cond, value = Value, values = Values, native = Native }) ->
