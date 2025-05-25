@@ -55,17 +55,21 @@ lotus_db:start_link:([DbConfig])
 
 {ok, 1} = lotus_db:delete(employees, #{where => [id, Id]})
 
-% is null
+% wher id is null
 lotus_db:first(employees, #{where => [id, is_null]})
-% is not null
+
+% where id is not null
 lotus_db:first(employees, #{where => [id, is_not_null]})
-% equals
+
+% where id is equals
 lotus_db:first(employees, #{where => [id, 1]})
-% not equals
+
+% where is is not  equals
 lotus_db:first(employees, #{where => [id, ne, 1]})
 
-% use eq, ne, gt, ge, lt, le, in, between
 ```
+
+Use eq, ne, gt, ge, lt, le, in, between
 
 ### JOIN
 
@@ -82,8 +86,9 @@ Joins = #{
       }
     }
   ],
-  where => [['emp.id', 1], ['dept_emps.id', 1]]	  
+  where => [['emp.id', 1], ['dept_emps.id', 1]]
 },
+
 % select employees join dept_emps join departments
 lotus_db:first(employees, Joins)
 ```

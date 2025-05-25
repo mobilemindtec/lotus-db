@@ -2,3 +2,5 @@ _build
 _checkout
 *.beam
 *.lock
+*.crashdump
+.envrc

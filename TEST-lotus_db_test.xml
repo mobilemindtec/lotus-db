@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<testsuite tests="3" failures="0" errors="0" skipped="0" time="0.031" name="module 'lotus_db_test'">
-  <testcase time="0.019" name="lotus_db_test:0 test_insert_employee">
+<testsuite tests="3" failures="0" errors="0" skipped="0" time="0.045" name="module 'lotus_db_test'">
+  <testcase time="0.030" name="lotus_db_test:0 test_insert_employee">
     <system-out>
     </system-out>
   </testcase>
-  <testcase time="0.001" name="lotus_db_test:0 test_join">
+  <testcase time="0.004" name="lotus_db_test:0 test_join">
     <system-out>
     </system-out>
   </testcase>
